@@ -16,14 +16,20 @@ async fn main(spawner: Spawner) {
     let p = embassy_stm32::init(Default::default());
     info!("Hello World!");
 
-    let mut watchdog = IndependentWatchdog::new(p.IWDG, 10_000_000);
-    unsafe { watchdog.unleash(); }
+    let ui_task = tasks::ui_task::UiTask::single();
+    spawner
+        .spawn(tasks::ui_task::ui_task(ui_task))
+        .unwrap();
 
-    spawner.spawn(tasks::led_task::led_task()).unwrap();
-    spawner.spawn(tasks::button_task::button_task()).unwrap();
+    let mut watchdog = IndependentWatchdog::new(p.IWDG, 10_000_000);
+    unsafe {
+        watchdog.unleash();
+    }
 
     loop {
         Timer::after(Duration::from_millis(1000)).await;
-        unsafe { watchdog.pet(); }
+        unsafe {
+            watchdog.pet();
+        }
     }
 }
