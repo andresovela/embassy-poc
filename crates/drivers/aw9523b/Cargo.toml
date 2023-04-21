@@ -1,0 +1,8 @@
+[package]
+name = "aw9523b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embedded-hal-async = "0.2.0-alpha.1"
+embedded-hal = "1.0.0-alpha.10"
