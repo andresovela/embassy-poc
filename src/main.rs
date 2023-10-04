@@ -3,6 +3,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(async_fn_in_trait)]
 
+use actor::*;
 use defmt::*;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
