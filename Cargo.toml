@@ -29,6 +29,7 @@ embassy-executor = { path = "../embassy/embassy-executor", features = ["arch-cor
 embassy-time = { path = "../embassy/embassy-time", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
 embassy-stm32 = { path = "../embassy/embassy-stm32", features = ["nightly", "defmt", "memory-x", "stm32f072rb", "time-driver-any", "exti", "unstable-pac", "unstable-traits"] }
 embassy-embedded-hal = { path = "../embassy/embassy-embedded-hal", features = ["nightly", "embedded-hal-async"] }
+embassy-futures = { path = "../embassy/embassy-futures", features = ["defmt"] }
 static_cell = "1.0"
 aw9523b = { path = "crates/drivers/aw9523b", version = "0.1.0" }
 
