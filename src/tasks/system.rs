@@ -1,62 +1,67 @@
-use crate::bsp::PowerHoldGpio;
+use crate::bsp::{power::Power, PowerHoldGpio, Watchdog};
+
+use super::dispatcher;
+use actor::*;
 use defmt::{info, Format};
-use embassy_futures::select::*;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::channel::{Channel, Receiver, Sender};
-use embassy_time::{Duration, Timer};
-use static_cell::StaticCell;
 
-type SystemTaskChannel = Channel<NoopRawMutex, SystemEvent, 2>;
-type SystemEventReceiver = Receiver<'static, NoopRawMutex, SystemEvent, 2>;
-type SystemEventSender = Sender<'static, NoopRawMutex, SystemEvent, 2>;
-
-static CHANNEL: StaticCell<SystemTaskChannel> = StaticCell::new();
+pub const QUEUE_SIZE: usize = 3;
+pub const IDLE_TIMEOUT_MS: u64 = 1000;
 
 #[derive(Format)]
-pub enum SystemEvent {
+pub enum Message {
     PowerOn,
     PowerOff,
 }
 
-pub struct SystemTaskCtx<'a> {
-    channel: &'a SystemTaskChannel,
-    power_hold_gpio: PowerHoldGpio,
+pub struct System {
+    dispatcher_inbox: DynamicInbox<dispatcher::Message>,
+    power: Power,
+    watchdog: Watchdog,
 }
 
-impl SystemTaskCtx<'static> {
-    /// Initializes and gets the communication channel for the system task.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if it gets called more than once.
-    pub fn new(power_hold_gpio: PowerHoldGpio) -> Self {
+impl System {
+    pub fn new(
+        dispatcher_inbox: DynamicInbox<dispatcher::Message>,
+        power_hold_gpio: PowerHoldGpio,
+        watchdog: Watchdog,
+    ) -> Self {
+        let power = Power::new(power_hold_gpio);
         Self {
-            channel: CHANNEL.init(Channel::new()),
-            power_hold_gpio,
+            dispatcher_inbox,
+            power,
+            watchdog,
         }
     }
 
-    /// Gets a sender to the UI task event channel.
-    pub fn sender(&self) -> SystemEventSender {
-        self.channel.sender()
+    fn on_power_off(&mut self) {
+        info!("Power off");
+        self.power.release();
+    }
+
+    fn on_power_on(&mut self) {
+        info!("Power on");
+        self.power.hold();
     }
 }
 
-#[embassy_executor::task]
-pub async fn system_task(task_ctx: SystemTaskCtx<'static>) {
-    let event_receiver = task_ctx.channel.receiver();
+impl ActorRuntime for System {
+    type Message = Message;
+    async fn on_init(&mut self) {
+        unsafe {
+            self.watchdog.unleash();
+        }
+    }
 
-    loop {
-        let receive_event = event_receiver.recv();
-        let timeout = Timer::after(Duration::from_millis(1000));
+    async fn on_idle(&mut self) {
+        unsafe {
+            self.watchdog.pet();
+        }
+    }
 
-        match select(receive_event, timeout).await {
-            Either::First(event) => {
-                info!("Got system event {:?}", event);
-            }
-            Either::Second(_) => {
-                info!("System task idle");
-            }
+    async fn on_message_received(&mut self, message: Self::Message) {
+        match message {
+            Message::PowerOff => self.on_power_off(),
+            Message::PowerOn => self.on_power_on(),
         }
     }
 }

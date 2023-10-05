@@ -1,48 +1,70 @@
-use crate::bsp::{
-    self, I2cDeviceOnSharedBus, IoExpanderIntGpio, IoExpanderResetGpio, PowerButtonGpio,
-};
+use crate::bsp::{I2cDeviceOnSharedBus, IoExpanderIntGpio, IoExpanderResetGpio, PowerButtonGpio};
 
-use actor::actor::*;
+use super::dispatcher;
+use crate::bsp;
+use actor::*;
+use aw9523b::Aw9523b;
 use defmt::{info, Format};
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use static_cell::StaticCell;
+
+pub const QUEUE_SIZE: usize = 3;
+pub const IDLE_TIMEOUT_MS: u64 = 30;
 
 type UiBsp =
     bsp::ui::Ui<IoExpanderResetGpio, IoExpanderIntGpio, PowerButtonGpio, I2cDeviceOnSharedBus>;
 
-pub type UiActor = Actor<Ui, NoopRawMutex, 2, 1000>;
-static ACTOR: StaticCell<UiActor> = StaticCell::new();
-
 #[derive(Format)]
-pub enum UiMessage {
+pub enum Message {
     PowerOn,
     PowerOff,
 }
 
 pub struct Ui {
-    pub i2c_device: I2cDeviceOnSharedBus,
-    pub power_button_gpio: PowerButtonGpio,
-    pub io_exp_reset_gpio: IoExpanderResetGpio,
-    pub io_exp_int_gpio: IoExpanderIntGpio,
+    dispatcher_inbox: DynamicInbox<dispatcher::Message>,
+    ui: UiBsp,
 }
 
 impl Ui {
-    pub fn into_actor(self) -> &'static mut UiActor {
-        let actor = Actor::new(self);
-        ACTOR.init(actor)
+    pub fn new(
+        dispatcher_inbox: DynamicInbox<dispatcher::Message>,
+        i2c_device: I2cDeviceOnSharedBus,
+        power_button_gpio: PowerButtonGpio,
+        io_exp_reset_gpio: IoExpanderResetGpio,
+        io_exp_int_gpio: IoExpanderIntGpio,
+    ) -> Self {
+        let io_expander = Aw9523b::new(i2c_device, bsp::i2c::AW9523B_I2C_ADDRESS);
+
+        let ui = bsp::ui::Ui::new(
+            io_expander,
+            io_exp_reset_gpio,
+            io_exp_int_gpio,
+            power_button_gpio,
+        );
+
+        Self {
+            dispatcher_inbox,
+            ui,
+        }
+    }
+
+    fn on_power_off(&mut self) {
+        info!("Power off");
+    }
+
+    fn on_power_on(&mut self) {
+        info!("Power on");
     }
 }
 
 impl ActorRuntime for Ui {
-    type Message = UiMessage;
+    type Message = Message;
     async fn on_init(&mut self) {}
 
     async fn on_idle(&mut self) {}
 
     async fn on_message_received(&mut self, message: Self::Message) {
         match message {
-            UiMessage::PowerOff => info!("Power off"),
-            UiMessage::PowerOn => info!("Power on"),
+            Message::PowerOff => self.on_power_off(),
+            Message::PowerOn => self.on_power_on(),
         }
     }
 }
