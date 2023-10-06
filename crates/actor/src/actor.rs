@@ -3,7 +3,7 @@ use static_cell::StaticCell;
 use embassy_futures::select::*;
 
 use embassy_sync::{
-    blocking_mutex::raw::{NoopRawMutex, RawMutex},
+    blocking_mutex::raw::RawMutex,
     channel::{Channel, DynamicSender, Sender},
 };
 
