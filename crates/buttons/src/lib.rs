@@ -1,4 +1,6 @@
 #![no_std]
+#![feature(type_alias_impl_trait)]
+#![feature(async_fn_in_trait)]
 
 use core::ops::{Add, Sub};
 
@@ -42,15 +44,15 @@ impl<'a, T: Handler> Buttons<'a, T> {
         }
     }
 
-    pub fn update_input(&mut self, input: Option<Id>) {
+    pub async fn update_input(&mut self, input: Option<Id>) {
         self.state = match self.state {
-            State::Released => self.released_state(input),
-            State::Debouncing => self.debouncing_state(input),
-            State::Pressed => self.pressed_state(input),
+            State::Released => self.released_state(input).await,
+            State::Debouncing => self.debouncing_state(input).await,
+            State::Pressed => self.pressed_state(input).await,
         };
     }
 
-    fn released_state(&mut self, input: Option<Id>) -> State {
+    async fn released_state(&mut self, input: Option<Id>) -> State {
         let Some(input) = input else {
             // We had one press but didn't send any events because the press was released too quickly
             // before we could determine if the repeated presses had ended
@@ -76,7 +78,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
                     if Some(event) != self.last_press_event_sent {
                         self.last_press_event_sent = Some(event);
-                        self.handler.on_event(self.last_button_pressed.unwrap(), event);
+                        self.handler.on_event(self.last_button_pressed.unwrap(), event).await;
                     }
                 }
             }
@@ -101,23 +103,23 @@ impl<'a, T: Handler> Buttons<'a, T> {
         self.start_press(input);
 
         if self.config.enable_raw_press_release_events {
-            self.handler.on_event(input, Event::Press(Kind::Raw));
+            self.handler.on_event(input, Event::Press(Kind::Raw)).await;
         }
 
         if self.config.short_press_duration > Ms(0) {
             return State::Debouncing;
         } else {
             // Call the press state immediately because we want to start handling the press
-            return self.pressed_state(Some(input));
+            return self.pressed_state(Some(input)).await;
         }
     }
 
-    fn debouncing_state(&mut self, input: Option<Id>) -> State {
+    async fn debouncing_state(&mut self, input: Option<Id>) -> State {
         let Some(input) = input else {
             debug!("Button released");
 
             if self.config.enable_raw_press_release_events {
-                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw));
+                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
             }
 
             return State::Released;
@@ -143,23 +145,23 @@ impl<'a, T: Handler> Buttons<'a, T> {
             self.start_press(input);
 
             // Call the press state immediately because we want to start handling the press
-            return self.pressed_state(Some(input));
+            return self.pressed_state(Some(input)).await;
         }
 
         State::Debouncing
     }
 
-    fn pressed_state(&mut self, input: Option<Id>) -> State {
+    async fn pressed_state(&mut self, input: Option<Id>) -> State {
         let Some(input) = input else {
             debug!("{} press released", input);
 
             if self.config.enable_raw_press_release_events {
-                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw));
+                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
             }
 
             // Only send the press released event if we actually got to send a press event before the button was released
             if let Some(press_event) = &self.last_press_event_sent {
-                self.handler.on_event(self.last_button_pressed.unwrap(), press_event.into_release());
+                self.handler.on_event(self.last_button_pressed.unwrap(), press_event.into_release()).await;
             }
 
             return State::Released;
@@ -171,15 +173,18 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
             if self.config.enable_raw_press_release_events {
                 self.handler
-                    .on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw));
+                    .on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw))
+                    .await;
             }
 
             // Only send the press released event if we actually got to send a press event before the button was released
             if let Some(press_event) = &self.last_press_event_sent {
-                self.handler.on_event(
-                    self.last_button_pressed.unwrap(),
-                    press_event.into_release(),
-                );
+                self.handler
+                    .on_event(
+                        self.last_button_pressed.unwrap(),
+                        press_event.into_release(),
+                    )
+                    .await;
             }
 
             // The input changed to something else,
@@ -230,7 +235,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
             if Some(event) != self.last_press_event_sent {
                 self.last_press_event_sent = Some(event);
-                self.handler.on_event(input, event);
+                self.handler.on_event(input, event).await;
             }
         }
 
@@ -241,7 +246,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
                 let hold_time =
                     current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
-                self.handler.on_event(input, Event::Hold(hold_time));
+                self.handler.on_event(input, Event::Hold(hold_time)).await;
                 self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
             }
         }
@@ -267,14 +272,14 @@ impl<'a, T: Handler> Buttons<'a, T> {
 }
 
 pub trait Handler {
-    fn on_event(&self, button: Id, event: Event);
+    async fn on_event(&mut self, button: Id, event: Event);
 
     fn get_current_timestamp(&self) -> Ms;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Ms(usize);
+pub struct Ms(pub usize);
 
 impl Ms {
     pub fn elapsed_since(&self, reference: Ms) -> Ms {
