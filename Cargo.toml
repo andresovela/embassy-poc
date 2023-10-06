@@ -55,6 +55,7 @@ embassy-futures = { path = "../embassy/embassy-futures", features = ["defmt"] }
 static_cell = "1.0"
 actor = { path = "crates/actor", version = "0.1.0" }
 aw9523b = { path = "crates/drivers/aw9523b", version = "0.1.0" }
+buttons = { path = "crates/buttons", version = "0.1.0", features = ["defmt"] }
 
 [dev-dependencies]
 defmt-test = "0.3"
