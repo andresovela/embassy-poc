@@ -47,6 +47,7 @@ impl System {
 impl ActorRuntime for System {
     type Message = Message;
     async fn on_init(&mut self) {
+        info!("System init");
         unsafe {
             self.watchdog.unleash();
         }

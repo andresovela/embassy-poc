@@ -18,6 +18,7 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     async fn on_system_message(&mut self, message: system::Message) {
+        info!("Got system message");
         match message {
             system::Message::PowerOn => self.ui_inbox.send(ui::Message::PowerOn).await,
             system::Message::PowerOff => self.ui_inbox.send(ui::Message::PowerOff).await,
@@ -25,13 +26,15 @@ impl Dispatcher {
     }
 
     async fn on_ui_message(&mut self, message: ui::Message) {
-        info!("Power on");
+        info!("Got UI message");
     }
 }
 
 impl ActorRuntime for Dispatcher {
     type Message = Message;
-    async fn on_init(&mut self) {}
+    async fn on_init(&mut self) {
+        info!("Dispatcher init");
+    }
 
     async fn on_idle(&mut self) {}
 
