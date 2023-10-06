@@ -32,15 +32,15 @@ impl Event {
         match self {
             Event::Release(_) => self,
             Event::Press(k) => Event::Release(k),
-            Event::Hold(k, _) => Event::Release(k),
+            Event::Hold(_) => panic!("Cannot convert `Event::Hold` into `Event::Release`"),
         }
     }
 
     pub(crate) fn with_length(self, length: Length) -> Self {
         match self {
-            Event::Release(k) => Event::Release(self.kind().with_length(length)),
-            Event::Press(k) => Event::Press(self.kind().with_length(length)),
-            Event::Hold(k, count) => Event::Hold(self.kind().with_length(length), count),
+            Event::Release(_) => Event::Release(self.kind().with_length(length)),
+            Event::Press(_) => Event::Press(self.kind().with_length(length)),
+            Event::Hold(_) => panic!("Cannot add length to `Event::Hold`"),
         }
     }
 
@@ -48,7 +48,7 @@ impl Event {
         match self {
             Event::Release(k) => k.clone(),
             Event::Press(k) => k.clone(),
-            Event::Hold(k, _) => k.clone(),
+            Event::Hold(_) => unreachable!(),
         }
     }
 }
@@ -57,10 +57,10 @@ impl Kind {
     pub(crate) fn with_length(self, length: Length) -> Self {
         match self {
             Kind::Raw => panic!("Cannot add length to `Kind::Raw`"),
-            Kind::Single(l) => Kind::Single(length),
-            Kind::Double(l) => Kind::Double(length),
-            Kind::Triple(l) => Kind::Triple(length),
-            Kind::Repeated(l, count) => Kind::Repeated(length, count.clone()),
+            Kind::Single(_) => Kind::Single(length),
+            Kind::Double(_) => Kind::Double(length),
+            Kind::Triple(_) => Kind::Triple(length),
+            Kind::Repeated(_, count) => Kind::Repeated(length, count.clone()),
         }
     }
 }

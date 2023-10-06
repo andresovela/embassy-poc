@@ -25,7 +25,7 @@ pub struct Buttons<'a, T: Handler> {
     last_press_start_timestamp: Option<Ms>,
     last_hold_event_timestamp: Option<Ms>,
     last_press_event_sent: Option<Event>,
-    consecutive_press_count: u16,
+    consecutive_press_count: u8,
 }
 
 impl<'a, T: Handler> Buttons<'a, T> {
@@ -54,30 +54,43 @@ impl<'a, T: Handler> Buttons<'a, T> {
         let Some(input) = input else {
             // We had one press but didn't send any events because the press was released too quickly
             // before we could determine if the repeated presses had ended
-            if self.last_press_event_sent.is_none() && self.consecutive_press_count > 0 {
+            if self.last_press_event_sent.is_none() {
                 let current_time = self.handler.get_current_timestamp();
                 let time_since_last_press_started = current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
-                todo!()
+                if time_since_last_press_started > self.config.repeated_press_threshold_duration {
+                    let event = if let Some(last_press_event_sent) = self.last_press_event_sent {
+                        last_press_event_sent.with_length(Length::Short)
+                    } else {
+                        // The first press event counts as the reference time to start sending hold events
+                        self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
+
+                        match self.consecutive_press_count {
+                            0 => unreachable!(),
+                            1 => Event::Press(Kind::Single(Length::Short)),
+                            2 => Event::Press(Kind::Double(Length::Short)),
+                            3 => Event::Press(Kind::Triple(Length::Short)),
+                            n => Event::Press(Kind::Repeated(Length::Short, n)),
+                        }
+                    };
+
+                    if Some(event) != self.last_press_event_sent {
+                        self.last_press_event_sent = Some(event);
+                        self.handler.on_event(self.last_button_pressed.unwrap(), event);
+                    }
+                }
             }
             return State::Released;
         };
 
         debug!("Button pressed {}", input);
-        if let Some(last_press_start_timestamp) = &self.last_press_start_timestamp {
-            let press_interval_exceeds_repeat_threshold = if let Some(last_press_start_timestamp) =
-                self.last_press_start_timestamp
-            {
-                let current_time = self.handler.get_current_timestamp();
-                let time_since_last_press = current_time.elapsed_since(last_press_start_timestamp);
-                time_since_last_press > self.config.repeated_press_threshold_duration
-            } else {
-                true
-            };
+        if let Some(last_press_start_timestamp) = self.last_press_start_timestamp {
+            let current_time = self.handler.get_current_timestamp();
+            let time_since_last_press = current_time.elapsed_since(last_press_start_timestamp);
 
             if Some(input) != self.last_button_pressed
                 || !self.input_supports_repeated_press_detection(input)
-                || press_interval_exceeds_repeat_threshold
+                || time_since_last_press > self.config.repeated_press_threshold_duration
             {
                 trace!("Consecutive count reset");
                 self.consecutive_press_count = 0;
@@ -200,12 +213,20 @@ impl<'a, T: Handler> Buttons<'a, T> {
             || time_since_press_started > self.config.repeated_press_threshold_duration;
 
         if !self.input_supports_repeated_press_detection(input) || can_send_repeat_press {
-            let event = self.last_press_event_sent.unwrap().with_length(length);
-
-            // The first press event counts as the reference time to start sending hold events
-            if self.last_press_event_sent.is_none() {
+            let event = if let Some(last_press_event_sent) = self.last_press_event_sent {
+                last_press_event_sent.with_length(length)
+            } else {
+                // The first press event counts as the reference time to start sending hold events
                 self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
-            }
+
+                match self.consecutive_press_count {
+                    0 => unreachable!(),
+                    1 => Event::Press(Kind::Single(length)),
+                    2 => Event::Press(Kind::Double(length)),
+                    3 => Event::Press(Kind::Triple(length)),
+                    n => Event::Press(Kind::Repeated(length, n)),
+                }
+            };
 
             if Some(event) != self.last_press_event_sent {
                 self.last_press_event_sent = Some(event);
