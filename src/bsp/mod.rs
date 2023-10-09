@@ -1,9 +1,9 @@
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use embassy_stm32::bind_interrupts;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
 use embassy_stm32::i2c::I2c;
-use embassy_stm32::interrupt;
-use embassy_stm32::peripherals::{DMA1_CH4, DMA1_CH5, I2C2, IWDG, PA1, PA2, PB2, PC5};
+use embassy_stm32::peripherals::{self, DMA1_CH4, DMA1_CH5, I2C2, IWDG, PA1, PA2, PB2, PC5};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::wdg::IndependentWatchdog;
 use embassy_stm32::Peripherals;
@@ -28,6 +28,10 @@ pub type Watchdog = IndependentWatchdog<'static, IWDG>;
 
 static I2C2_BUS: StaticCell<Mutex<ThreadModeRawMutex, SharedI2cBus>> = StaticCell::new();
 
+bind_interrupts!(struct Irqs {
+    I2C2 => embassy_stm32::i2c::InterruptHandler<peripherals::I2C2>;
+});
+
 pub struct EcospeakerV1<'a> {
     pub shared_i2c_bus: &'a mut Mutex<ThreadModeRawMutex, SharedI2cBus>,
     pub power_button_gpio: PowerButtonGpio,
@@ -39,13 +43,11 @@ pub struct EcospeakerV1<'a> {
 
 impl EcospeakerV1<'static> {
     pub fn new(p: Peripherals) -> Self {
-        let i2c2_irq = interrupt::take!(I2C2);
-
         let i2c2 = I2c::new(
             p.I2C2,
             p.PB10,
             p.PB11,
-            i2c2_irq,
+            Irqs,
             p.DMA1_CH4,
             p.DMA1_CH5,
             Hertz(100_000),

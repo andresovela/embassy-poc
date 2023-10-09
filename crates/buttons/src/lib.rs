@@ -2,6 +2,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(async_fn_in_trait)]
 
+use core::marker::PhantomData;
 use core::ops::{Add, Sub};
 
 mod config;
@@ -20,7 +21,7 @@ enum State {
 }
 
 pub struct Buttons<'a, T: Handler> {
-    handler: T,
+    handler: PhantomData<T>,
     config: Config<'a>,
     state: State,
     last_button_pressed: Option<Id>,
@@ -31,9 +32,9 @@ pub struct Buttons<'a, T: Handler> {
 }
 
 impl<'a, T: Handler> Buttons<'a, T> {
-    pub fn new(handler: T, config: Config<'a>) -> Self {
+    pub fn new(config: Config<'a>) -> Self {
         Self {
-            handler,
+            handler: PhantomData,
             config,
             state: State::Released,
             last_button_pressed: None,
@@ -44,20 +45,20 @@ impl<'a, T: Handler> Buttons<'a, T> {
         }
     }
 
-    pub async fn update_input(&mut self, input: Option<Id>) {
+    pub async fn process_input(&mut self, handler: &mut T, input: Option<Id>) {
         self.state = match self.state {
-            State::Released => self.released_state(input).await,
-            State::Debouncing => self.debouncing_state(input).await,
-            State::Pressed => self.pressed_state(input).await,
+            State::Released => self.released_state(handler, input).await,
+            State::Debouncing => self.debouncing_state(handler, input).await,
+            State::Pressed => self.pressed_state(handler, input).await,
         };
     }
 
-    async fn released_state(&mut self, input: Option<Id>) -> State {
+    async fn released_state(&mut self, handler: &mut T, input: Option<Id>) -> State {
         let Some(input) = input else {
             // We had one press but didn't send any events because the press was released too quickly
             // before we could determine if the repeated presses had ended
             if self.last_press_event_sent.is_none() {
-                let current_time = self.handler.get_current_timestamp();
+                let current_time = handler.get_current_timestamp();
                 let time_since_last_press_started = current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
                 if time_since_last_press_started > self.config.repeated_press_threshold_duration {
@@ -65,7 +66,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
                         last_press_event_sent.with_length(Length::Short)
                     } else {
                         // The first press event counts as the reference time to start sending hold events
-                        self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
+                        self.last_hold_event_timestamp = Some(handler.get_current_timestamp());
 
                         match self.consecutive_press_count {
                             0 => unreachable!(),
@@ -78,7 +79,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
                     if Some(event) != self.last_press_event_sent {
                         self.last_press_event_sent = Some(event);
-                        self.handler.on_event(self.last_button_pressed.unwrap(), event).await;
+                        handler.on_event(self.last_button_pressed.unwrap(), event).await;
                     }
                 }
             }
@@ -87,7 +88,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
         debug!("Button pressed {}", input);
         if let Some(last_press_start_timestamp) = self.last_press_start_timestamp {
-            let current_time = self.handler.get_current_timestamp();
+            let current_time = handler.get_current_timestamp();
             let time_since_last_press = current_time.elapsed_since(last_press_start_timestamp);
 
             if Some(input) != self.last_button_pressed
@@ -99,33 +100,33 @@ impl<'a, T: Handler> Buttons<'a, T> {
             }
         }
 
-        self.last_press_start_timestamp = Some(self.handler.get_current_timestamp());
+        self.last_press_start_timestamp = Some(handler.get_current_timestamp());
         self.start_press(input);
 
         if self.config.enable_raw_press_release_events {
-            self.handler.on_event(input, Event::Press(Kind::Raw)).await;
+            handler.on_event(input, Event::Press(Kind::Raw)).await;
         }
 
         if self.config.short_press_duration > Ms(0) {
             return State::Debouncing;
         } else {
             // Call the press state immediately because we want to start handling the press
-            return self.pressed_state(Some(input)).await;
+            return self.pressed_state(handler, Some(input)).await;
         }
     }
 
-    async fn debouncing_state(&mut self, input: Option<Id>) -> State {
+    async fn debouncing_state(&mut self, handler: &mut T, input: Option<Id>) -> State {
         let Some(input) = input else {
             debug!("Button released");
 
             if self.config.enable_raw_press_release_events {
-                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
+                handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
             }
 
             return State::Released;
         };
 
-        let current_time = self.handler.get_current_timestamp();
+        let current_time = handler.get_current_timestamp();
 
         // If the input changes mid-press, reset the press timestamp
         if Some(input) != self.last_button_pressed {
@@ -145,23 +146,23 @@ impl<'a, T: Handler> Buttons<'a, T> {
             self.start_press(input);
 
             // Call the press state immediately because we want to start handling the press
-            return self.pressed_state(Some(input)).await;
+            return self.pressed_state(handler, Some(input)).await;
         }
 
         State::Debouncing
     }
 
-    async fn pressed_state(&mut self, input: Option<Id>) -> State {
+    async fn pressed_state(&mut self, handler: &mut T, input: Option<Id>) -> State {
         let Some(input) = input else {
             debug!("{} press released", input);
 
             if self.config.enable_raw_press_release_events {
-                self.handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
+                handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
             }
 
             // Only send the press released event if we actually got to send a press event before the button was released
             if let Some(press_event) = &self.last_press_event_sent {
-                self.handler.on_event(self.last_button_pressed.unwrap(), press_event.into_release()).await;
+                handler.on_event(self.last_button_pressed.unwrap(), press_event.into_release()).await;
             }
 
             return State::Released;
@@ -172,14 +173,14 @@ impl<'a, T: Handler> Buttons<'a, T> {
             trace!("Button press changed to {} without releasing first", input);
 
             if self.config.enable_raw_press_release_events {
-                self.handler
+                handler
                     .on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw))
                     .await;
             }
 
             // Only send the press released event if we actually got to send a press event before the button was released
             if let Some(press_event) = &self.last_press_event_sent {
-                self.handler
+                handler
                     .on_event(
                         self.last_button_pressed.unwrap(),
                         press_event.into_release(),
@@ -190,7 +191,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
             // The input changed to something else,
             // therefore it can't be a repeated press
             self.consecutive_press_count = 0;
-            self.last_press_start_timestamp = Some(self.handler.get_current_timestamp());
+            self.last_press_start_timestamp = Some(handler.get_current_timestamp());
             self.start_press(input);
 
             if self.config.short_press_duration > Ms(0) {
@@ -198,7 +199,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
             }
         }
 
-        let current_time = self.handler.get_current_timestamp();
+        let current_time = handler.get_current_timestamp();
         let time_since_press_started =
             current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
@@ -222,7 +223,7 @@ impl<'a, T: Handler> Buttons<'a, T> {
                 last_press_event_sent.with_length(length)
             } else {
                 // The first press event counts as the reference time to start sending hold events
-                self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
+                self.last_hold_event_timestamp = Some(handler.get_current_timestamp());
 
                 match self.consecutive_press_count {
                     0 => unreachable!(),
@@ -235,19 +236,19 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
             if Some(event) != self.last_press_event_sent {
                 self.last_press_event_sent = Some(event);
-                self.handler.on_event(input, event).await;
+                handler.on_event(input, event).await;
             }
         }
 
         if let Some(last_hold_event_timestamp) = self.last_hold_event_timestamp {
-            let current_time = self.handler.get_current_timestamp();
+            let current_time = handler.get_current_timestamp();
             let time_since_last_hold_event = current_time.elapsed_since(last_hold_event_timestamp);
             if time_since_last_hold_event > self.config.hold_event_interval {
                 let hold_time =
                     current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
-                self.handler.on_event(input, Event::Hold(hold_time)).await;
-                self.last_hold_event_timestamp = Some(self.handler.get_current_timestamp());
+                handler.on_event(input, Event::Hold(hold_time)).await;
+                self.last_hold_event_timestamp = Some(handler.get_current_timestamp());
             }
         }
 
@@ -305,4 +306,4 @@ impl Sub for Ms {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Id(usize);
+pub struct Id(pub usize);

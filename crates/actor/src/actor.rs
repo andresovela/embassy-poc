@@ -49,7 +49,7 @@ where
         actor.on_init().await;
 
         loop {
-            let receive_message = self.channel.recv();
+            let receive_message = self.channel.receive();
             let timeout = Timer::after(Duration::from_millis(IDLE_TIMEOUT_MS));
 
             match select(receive_message, timeout).await {
