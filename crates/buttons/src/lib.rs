@@ -59,7 +59,8 @@ impl<'a, T: Handler> Buttons<'a, T> {
             // before we could determine if the repeated presses had ended
             if self.last_press_event_sent.is_none() {
                 let current_time = handler.get_current_timestamp();
-                let time_since_last_press_started = current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
+                let time_since_last_press_started =
+                    current_time.elapsed_since(self.last_press_start_timestamp.unwrap());
 
                 if time_since_last_press_started > self.config.repeated_press_threshold_duration {
                     let event = if let Some(last_press_event_sent) = self.last_press_event_sent {
@@ -79,7 +80,9 @@ impl<'a, T: Handler> Buttons<'a, T> {
 
                     if Some(event) != self.last_press_event_sent {
                         self.last_press_event_sent = Some(event);
-                        handler.on_event(self.last_button_pressed.unwrap(), event).await;
+                        handler
+                            .on_event(self.last_button_pressed.unwrap(), event)
+                            .await;
                     }
                 }
             }
@@ -120,7 +123,9 @@ impl<'a, T: Handler> Buttons<'a, T> {
             debug!("Button released");
 
             if self.config.enable_raw_press_release_events {
-                handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
+                handler
+                    .on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw))
+                    .await;
             }
 
             return State::Released;
@@ -157,12 +162,19 @@ impl<'a, T: Handler> Buttons<'a, T> {
             debug!("{} press released", input);
 
             if self.config.enable_raw_press_release_events {
-                handler.on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw)).await;
+                handler
+                    .on_event(self.last_button_pressed.unwrap(), Event::Release(Kind::Raw))
+                    .await;
             }
 
             // Only send the press released event if we actually got to send a press event before the button was released
             if let Some(press_event) = &self.last_press_event_sent {
-                handler.on_event(self.last_button_pressed.unwrap(), press_event.into_release()).await;
+                handler
+                    .on_event(
+                        self.last_button_pressed.unwrap(),
+                        press_event.into_release(),
+                    )
+                    .await;
             }
 
             return State::Released;
@@ -263,7 +275,9 @@ impl<'a, T: Handler> Buttons<'a, T> {
     }
 
     fn input_supports_repeated_press_detection(&self, input: Id) -> bool {
-        let Some(buttons_with_repeated_press_support) = self.config.buttons_with_repeated_press_support else {
+        let Some(buttons_with_repeated_press_support) =
+            self.config.buttons_with_repeated_press_support
+        else {
             // If the user provided no list in the configuration, all buttons support repeated presses by default
             return true;
         };
@@ -280,7 +294,7 @@ pub trait Handler {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Ms(pub usize);
+pub struct Ms(pub u64);
 
 impl Ms {
     pub fn elapsed_since(&self, reference: Ms) -> Ms {

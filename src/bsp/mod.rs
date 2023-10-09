@@ -9,16 +9,16 @@ use embassy_stm32::wdg::IndependentWatchdog;
 use embassy_stm32::Peripherals;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::mutex::Mutex;
+use embassy_time::Duration;
 use static_cell::StaticCell;
 
+use self::i2c::RobustI2c;
+
+pub mod i2c;
 pub mod power;
 pub mod ui;
 
-pub mod i2c {
-    pub const AW9523B_I2C_ADDRESS: u8 = 0x5B;
-}
-
-pub type SharedI2cBus = I2c<'static, I2C2, DMA1_CH4, DMA1_CH5>;
+pub type SharedI2cBus = RobustI2c<'static, I2C2, DMA1_CH4, DMA1_CH5>;
 pub type IoExpanderResetGpio = Output<'static, PC5>;
 pub type IoExpanderIntGpio = ExtiInput<'static, PB2>;
 pub type PowerButtonGpio = Input<'static, PA2>;
@@ -54,9 +54,10 @@ impl EcospeakerV1<'static> {
             Default::default(),
         );
 
-        let i2c2_bus = Mutex::<ThreadModeRawMutex, _>::new(i2c2);
-        let shared_i2c_bus: &mut Mutex<ThreadModeRawMutex, I2c<I2C2, DMA1_CH4, DMA1_CH5>> =
-            I2C2_BUS.init(i2c2_bus);
+        let robust_i2c = RobustI2c::new(i2c2, Duration::from_millis(1000), 5);
+
+        let i2c2_bus = Mutex::<ThreadModeRawMutex, _>::new(robust_i2c);
+        let shared_i2c_bus = I2C2_BUS.init(i2c2_bus);
 
         let power_button_gpio = Input::new(p.PA2, Pull::Up);
         let power_hold_gpio = Output::new(p.PA1, Level::Low, Speed::Low);
