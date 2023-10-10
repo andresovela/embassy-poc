@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use aw9523b::{Aw9523b, AwError, Pin, PinMode, PinState, Port, PortPin};
+use embassy_time::{Duration, Timer};
 
 const BT_BUTTON: Pin = Pin(Port::Port0, PortPin::P2);
 const PLAY_BUTTON: Pin = Pin(Port::Port0, PortPin::P3);
@@ -65,7 +66,10 @@ where
     }
 
     pub async fn initialize(&mut self) -> Result<(), Error<E>> {
-        self.io_exp_reset_gpio.set_low().unwrap();
+        self.io_exp_reset_gpio.set_high().unwrap();
+
+        Timer::after(Duration::from_millis(10)).await;
+
         self.io_expander.software_reset().await?;
 
         // Configure button GPIOs as inputs
