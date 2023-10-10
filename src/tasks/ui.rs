@@ -2,7 +2,7 @@ use crate::bsp::{
     self, I2cDeviceOnSharedBus, IoExpanderIntGpio, IoExpanderResetGpio, PowerButtonGpio,
 };
 use aw9523b::Aw9523b;
-use buttons::{Buttons, Event, Id, Ms, RepeatedPressMode};
+use buttons::{Buttons, Event, Id, RepeatedPressMode};
 use defmt::info;
 use embassy_time::{Duration, Timer};
 
@@ -36,12 +36,12 @@ impl Ui {
 #[embassy_executor::task]
 pub async fn task(mut ui: Ui) {
     let mut buttons: Buttons<'_, Ui> = Buttons::new(buttons::Config {
-        short_press_duration: Ms(50),
-        medium_press_duration: Ms(1000),
-        long_press_duration: Ms(5000),
-        very_long_press_duration: Ms(30000),
-        hold_event_interval: Ms(100),
-        repeated_press_threshold_duration: Ms(500),
+        short_press_duration: Duration::from_millis(50),
+        medium_press_duration: Duration::from_millis(1000),
+        long_press_duration: Duration::from_millis(5000),
+        very_long_press_duration: Duration::from_millis(30000),
+        hold_event_interval: Duration::from_millis(100),
+        repeated_press_threshold_duration: Duration::from_millis(500),
         buttons_with_repeated_press_support: None,
         repeated_press_mode: RepeatedPressMode::Immediate,
         enable_raw_press_release_events: true,
@@ -66,9 +66,5 @@ pub async fn task(mut ui: Ui) {
 impl buttons::Handler for Ui {
     async fn on_event(&mut self, button: buttons::Id, event: Event) {
         info!("Got {} for button {}", event, button);
-    }
-
-    fn get_current_timestamp(&self) -> Ms {
-        Ms(embassy_time::Instant::now().as_millis())
     }
 }

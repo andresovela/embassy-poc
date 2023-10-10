@@ -8,6 +8,13 @@ license = "MIT OR Apache-2.0"
 [workspace]
 members = ["crates/actor", "crates/drivers/*"]
 
+[workspace.dependencies]
+embassy-time = { git = "https://github.com/embassy-rs/embassy", features = [
+    "defmt",
+    "defmt-timestamp-uptime",
+    "tick-hz-32_768",
+] }
+
 [lib]
 harness = false
 
@@ -35,11 +42,7 @@ embassy-executor = { git = "https://github.com/embassy-rs/embassy", features = [
     "integrated-timers",
     "nightly",
 ] }
-embassy-time = { git = "https://github.com/embassy-rs/embassy", features = [
-    "defmt",
-    "defmt-timestamp-uptime",
-    "tick-hz-32_768",
-] }
+embassy-time = { workspace = true }
 embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", features = [
     "nightly",
     "defmt",

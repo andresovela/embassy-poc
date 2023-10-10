@@ -1,11 +1,11 @@
-use crate::Ms;
+use embassy_time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     Release(Kind),
     Press(Kind),
-    Hold(Ms),
+    Hold(Duration),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
