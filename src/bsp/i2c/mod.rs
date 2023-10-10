@@ -27,14 +27,15 @@ impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal::i2c::ErrorType
     type Error = embassy_stm32::i2c::Error;
 }
 
-impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal_async::i2c::I2c
+impl<'a, T: Instance, TXDMA: TxDma<T>, RXDMA: RxDma<T>> embedded_hal_async::i2c::I2c
     for RobustI2c<'a, T, TXDMA, RXDMA>
 {
     async fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
         for _ in 0..self.retries {
             let result = self
                 .i2c
-                .blocking_read_timeout(address, read, timeout_fn(self.timeout));
+                .read_timeout(address, read, timeout_fn(self.timeout))
+                .await;
 
             if result.is_ok() {
                 return Ok(());
@@ -49,7 +50,8 @@ impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal_async::i2c::I2c
             info!("Trying I2C write");
             let result = self
                 .i2c
-                .blocking_write_timeout(address, write, timeout_fn(self.timeout));
+                .write_timeout(address, write, timeout_fn(self.timeout))
+                .await;
 
             if result.is_ok() {
                 return Ok(());
@@ -67,12 +69,10 @@ impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal_async::i2c::I2c
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
         for _ in 0..self.retries {
-            let result = self.i2c.blocking_write_read_timeout(
-                address,
-                write,
-                read,
-                timeout_fn(self.timeout),
-            );
+            let result = self
+                .i2c
+                .write_read_timeout(address, write, read, timeout_fn(self.timeout))
+                .await;
 
             if result.is_ok() {
                 return Ok(());

@@ -19,7 +19,7 @@ pub mod i2c;
 pub mod power;
 pub mod ui;
 
-pub type SharedI2cBus = RobustI2c<'static, I2C2, NoDma, NoDma>;
+pub type SharedI2cBus = RobustI2c<'static, I2C2, DMA1_CH4, DMA1_CH5>;
 pub type IoExpanderResetGpio = Output<'static, PA8>;
 pub type IoExpanderIntGpio = ExtiInput<'static, PB2>;
 pub type PowerButtonGpio = Input<'static, PA2>;
@@ -49,8 +49,8 @@ impl EcospeakerV1<'static> {
             p.PB10,
             p.PB11,
             Irqs,
-            NoDma,
-            NoDma,
+            p.DMA1_CH4,
+            p.DMA1_CH5,
             Hertz(100_000),
             Default::default(),
         );
