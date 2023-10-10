@@ -1,5 +1,6 @@
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_stm32::bind_interrupts;
+use embassy_stm32::dma::NoDma;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
 use embassy_stm32::i2c::I2c;
@@ -18,7 +19,7 @@ pub mod i2c;
 pub mod power;
 pub mod ui;
 
-pub type SharedI2cBus = RobustI2c<'static, I2C2, DMA1_CH4, DMA1_CH5>;
+pub type SharedI2cBus = RobustI2c<'static, I2C2, NoDma, NoDma>;
 pub type IoExpanderResetGpio = Output<'static, PC5>;
 pub type IoExpanderIntGpio = ExtiInput<'static, PB2>;
 pub type PowerButtonGpio = Input<'static, PA2>;
@@ -48,13 +49,13 @@ impl EcospeakerV1<'static> {
             p.PB10,
             p.PB11,
             Irqs,
-            p.DMA1_CH4,
-            p.DMA1_CH5,
+            NoDma,
+            NoDma,
             Hertz(100_000),
             Default::default(),
         );
 
-        let robust_i2c = RobustI2c::new(i2c2, Duration::from_millis(1000), 5);
+        let robust_i2c = RobustI2c::new(i2c2, Duration::from_millis(100), 5);
 
         let i2c2_bus = Mutex::<ThreadModeRawMutex, _>::new(robust_i2c);
         let shared_i2c_bus = I2C2_BUS.init(i2c2_bus);

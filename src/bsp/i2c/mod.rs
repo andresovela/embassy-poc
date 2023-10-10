@@ -1,5 +1,5 @@
 use embassy_stm32::i2c::{I2c, Instance, RxDma, TxDma};
-use embassy_time::{Duration, Instant};
+use embassy_time::{Duration, Instant, Timer};
 
 use defmt::info;
 
@@ -27,15 +27,14 @@ impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal::i2c::ErrorType
     type Error = embassy_stm32::i2c::Error;
 }
 
-impl<'a, T: Instance, TXDMA: TxDma<T>, RXDMA: RxDma<T>> embedded_hal_async::i2c::I2c
+impl<'a, T: Instance, TXDMA, RXDMA> embedded_hal_async::i2c::I2c
     for RobustI2c<'a, T, TXDMA, RXDMA>
 {
     async fn read(&mut self, address: u8, read: &mut [u8]) -> Result<(), Self::Error> {
         for _ in 0..self.retries {
             let result = self
                 .i2c
-                .read_timeout(address, read, timeout_fn(self.timeout))
-                .await;
+                .blocking_read_timeout(address, read, timeout_fn(self.timeout));
 
             if result.is_ok() {
                 return Ok(());
@@ -45,15 +44,18 @@ impl<'a, T: Instance, TXDMA: TxDma<T>, RXDMA: RxDma<T>> embedded_hal_async::i2c:
     }
 
     async fn write(&mut self, address: u8, write: &[u8]) -> Result<(), Self::Error> {
+        info!("Write with {} retries", self.retries);
         for _ in 0..self.retries {
+            info!("Trying I2C write");
             let result = self
                 .i2c
-                .write_timeout(address, write, timeout_fn(self.timeout))
-                .await;
+                .blocking_write_timeout(address, write, timeout_fn(self.timeout));
 
             if result.is_ok() {
                 return Ok(());
             }
+
+            Timer::after(Duration::from_millis(20)).await;
         }
         Err(embassy_stm32::i2c::Error::Timeout)
     }
@@ -65,10 +67,12 @@ impl<'a, T: Instance, TXDMA: TxDma<T>, RXDMA: RxDma<T>> embedded_hal_async::i2c:
         read: &mut [u8],
     ) -> Result<(), Self::Error> {
         for _ in 0..self.retries {
-            let result = self
-                .i2c
-                .write_read_timeout(address, write, read, timeout_fn(self.timeout))
-                .await;
+            let result = self.i2c.blocking_write_read_timeout(
+                address,
+                write,
+                read,
+                timeout_fn(self.timeout),
+            );
 
             if result.is_ok() {
                 return Ok(());
