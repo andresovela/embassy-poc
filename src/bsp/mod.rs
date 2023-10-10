@@ -1,10 +1,9 @@
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_stm32::bind_interrupts;
-use embassy_stm32::dma::NoDma;
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
 use embassy_stm32::i2c::I2c;
-use embassy_stm32::peripherals::{self, DMA1_CH4, DMA1_CH5, I2C2, IWDG, PA1, PA2, PA8, PB2};
+use embassy_stm32::peripherals::{self, DMA1_CH4, DMA1_CH5, I2C2, IWDG, PA1, PA2, PB2, PC5};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::wdg::IndependentWatchdog;
 use embassy_stm32::Peripherals;
@@ -20,7 +19,7 @@ pub mod power;
 pub mod ui;
 
 pub type SharedI2cBus = RobustI2c<'static, I2C2, DMA1_CH4, DMA1_CH5>;
-pub type IoExpanderResetGpio = Output<'static, PA8>;
+pub type IoExpanderResetGpio = Output<'static, PC5>;
 pub type IoExpanderIntGpio = ExtiInput<'static, PB2>;
 pub type PowerButtonGpio = Input<'static, PA2>;
 pub type PowerHoldGpio = Output<'static, PA1>;
@@ -64,7 +63,7 @@ impl EcospeakerV1<'static> {
         let power_hold_gpio = Output::new(p.PA1, Level::Low, Speed::Low);
         let io_exp_int_gpio = Input::new(p.PB2, Pull::Up);
         let io_exp_int_gpio = ExtiInput::new(io_exp_int_gpio, p.EXTI2);
-        let io_exp_reset_gpio = Output::new(p.PA8, Level::Low, Speed::Low);
+        let io_exp_reset_gpio = Output::new(p.PC5, Level::Low, Speed::Low);
 
         let watchdog = IndependentWatchdog::new(p.IWDG, 10_000_000);
 
